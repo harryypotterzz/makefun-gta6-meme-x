@@ -11,12 +11,39 @@
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { copyFileSync, mkdirSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const postPath = join(here, 'POST.json');
+
+// The entry is only valid when POST.json names a real X post: refuse to hand
+// in a missing, malformed or non-X address instead of copying it blindly.
+if (!existsSync(postPath)) {
+  process.stderr.write('gta6-meme-x-01: POST.json is missing beside main.ts\n');
+  process.exit(2);
+}
+let post;
+try {
+  post = JSON.parse(readFileSync(postPath, 'utf8'));
+} catch {
+  process.stderr.write('gta6-meme-x-01: POST.json is not valid JSON\n');
+  process.exit(2);
+}
+const url = typeof post?.url === 'string' ? post.url : '';
+let parsed;
+try {
+  parsed = new URL(url);
+} catch {
+  parsed = null;
+}
+if (!parsed || parsed.protocol !== 'https:' || !parsed.hostname.endsWith('x.com')) {
+  process.stderr.write(`gta6-meme-x-01: POST.json url is not an https://x.com post address: ${url}\n`);
+  process.exit(2);
+}
 
 mkdirSync(out, { recursive: true });
-copyFileSync(join(here, 'POST.json'), join(out, 'POST.json'));
+copyFileSync(postPath, join(out, 'POST.json'));
+console.log(`gta6-meme-x-01: handed in ${url} -> ${join(out, 'POST.json')}`);
